@@ -57,9 +57,9 @@ install_git_config() {
     
     if [[ -f ~/.gitconfig ]]; then
         print_warning "Existing ~/.gitconfig found"
-        read -p "Do you want to backup and replace it? [y/N] " -n 1 -r
+        read -p "Do you want to backup and replace it? [Y/n] " -n 1 -r
         echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
             cp ~/.gitconfig ~/.gitconfig.backup
             print_status "Backed up existing config to ~/.gitconfig.backup"
             cp .gitconfig ~/.gitconfig
@@ -75,9 +75,9 @@ install_git_config() {
     
     # Install git shell aliases
     echo ""
-    read -p "Do you want to install git shell aliases (gcm, gp, gs, etc.)? [y/N] " -n 1 -r
+    read -p "Do you want to install git shell aliases (gcm, gp, gs, etc.)? [Y/n] " -n 1 -r
     echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
         install_git_aliases
     fi
 }
@@ -136,9 +136,9 @@ add_to_path() {
         return
     fi
     
-    read -p "Do you want to add $(pwd) to your PATH in $shell_rc? [y/N] " -n 1 -r
+    read -p "Do you want to add $(pwd) to your PATH in $shell_rc? [Y/n] " -n 1 -r
     echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
         echo "" >> "$shell_rc"
         echo "# Arch Utils" >> "$shell_rc"
         echo "export PATH=\"\$PATH:$current_dir\"" >> "$shell_rc"
@@ -151,9 +151,9 @@ add_to_path() {
 create_symlinks() {
     print_header "System-wide Installation"
     
-    read -p "Do you want to create system-wide symlinks in /usr/local/bin? [y/N] " -n 1 -r
+    read -p "Do you want to create system-wide symlinks in /usr/local/bin? [Y/n] " -n 1 -r
     echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
         local current_dir=$(pwd)
         local scripts=("update" "list" "remove" "clean" "sysinfo")
         
@@ -181,9 +181,9 @@ check_dependencies() {
         print_success "paru is installed (AUR support available)"
     else
         print_warning "paru is not installed (AUR features will be limited)"
-        read -p "Do you want to install paru? [y/N] " -n 1 -r
+        read -p "Do you want to install paru? [Y/n] " -n 1 -r
         echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
             print_status "Installing paru..."
             cd /tmp
             git clone https://aur.archlinux.org/paru.git
@@ -199,9 +199,9 @@ check_dependencies() {
         print_success "lm_sensors is installed (temperature monitoring available)"
     else
         print_warning "lm_sensors is not installed (temperature monitoring unavailable)"
-        read -p "Do you want to install lm_sensors? [y/N] " -n 1 -r
+        read -p "Do you want to install lm_sensors? [Y/n] " -n 1 -r
         echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
             sudo pacman -S --noconfirm lm_sensors
             print_success "lm_sensors installed successfully"
         fi
