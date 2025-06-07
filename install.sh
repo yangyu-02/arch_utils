@@ -72,6 +72,44 @@ install_git_config() {
         cp .gitconfig ~/.gitconfig
         print_success "Git configuration installed"
     fi
+    
+    # Install git shell aliases
+    echo ""
+    read -p "Do you want to install git shell aliases (gcm, gp, gs, etc.)? [y/N] " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        install_git_aliases
+    fi
+}
+
+# Install git shell aliases
+install_git_aliases() {
+    local current_dir=$(pwd)
+    local shell_rc=""
+    
+    # Detect shell
+    if [[ $SHELL == *"zsh"* ]]; then
+        shell_rc="$HOME/.zshrc"
+    elif [[ $SHELL == *"bash"* ]]; then
+        shell_rc="$HOME/.bashrc"
+    else
+        print_warning "Unknown shell: $SHELL"
+        print_status "You may need to manually source git_aliases.sh"
+        return
+    fi
+    
+    # Check if already sourced
+    if grep -q "git_aliases.sh" "$shell_rc" 2>/dev/null; then
+        print_warning "Git aliases already appear to be configured"
+        return
+    fi
+    
+    echo "" >> "$shell_rc"
+    echo "# Git shell aliases" >> "$shell_rc"
+    echo "source \"$current_dir/git_aliases.sh\"" >> "$shell_rc"
+    print_success "Git shell aliases added to $shell_rc"
+    print_status "Restart your shell or run: source $shell_rc"
+    print_status "Then you can use: gcm 'message', gp, gs, etc."
 }
 
 # Add to PATH

@@ -1,77 +1,14 @@
 [alias]
-    # Basic shortcuts
-    st = status
-    co = checkout
-    br = branch
-    ci = commit
-    cm = commit -m
-    ca = commit -am
-    
-    # Advanced shortcuts
-    unstage = reset HEAD --
-    last = log -1 HEAD
-    visual = !gitk
-    
-    # Logging aliases
-    lg = log --oneline --decorate --graph
-    lga = log --oneline --decorate --graph --all
-    ll = log --pretty=format:'%C(yellow)%h%Creset -%C(red)%d%Creset %s %C(green)(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
-    lla = log --pretty=format:'%C(yellow)%h%Creset -%C(red)%d%Creset %s %C(green)(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --all
-    
-    # Diff aliases
-    df = diff
-    dc = diff --cached
-    dt = difftool
-    
-    # Stash aliases
-    sl = stash list
-    sa = stash apply
-    ss = stash save
-    sp = stash pop
-    
-    # Remote aliases
-    rao = remote add origin
-    rso = remote set-url origin
-    rpo = remote prune origin
-    
-    # Branch management
-    bd = branch -d
-    bD = branch -D
-    ba = branch -a
-    
-    # Merge and rebase
-    mg = merge --no-ff
-    rb = rebase
-    rbi = rebase -i
-    rbc = rebase --continue
-    rba = rebase --abort
-    
-    # Push and pull shortcuts
-    ps = push
-    pso = push origin
-    psf = push --force-with-lease
-    pl = pull
-    plo = pull origin
-    plr = pull --rebase
-    
-    # Useful utilities
+    # Essential utilities only (use shell aliases for basic commands)
+    flip = "!f() { branches=$(git for-each-ref --format='%(refname:short)' --sort=-committerdate refs/heads/ | head -9); echo 'Recent branches:'; i=1; for branch in $branches; do echo \"$i) $branch\"; i=$((i+1)); done; echo '0) Exit'; read -p 'Select branch (0-9): ' choice; case $choice in 0) echo 'Exiting...';; [1-9]) selected=$(echo \"$branches\" | sed -n \"${choice}p\"); if [ -n \"$selected\" ]; then git checkout \"$selected\"; else echo 'Invalid selection'; fi;; *) echo 'Invalid input';; esac; }; f"
     aliases = config --get-regexp alias
-    amend = commit --amend
     undo = reset --soft HEAD^
     wipe = reset --hard HEAD
     clean-branches = "!git branch --merged | grep -v '\\*\\|master\\|main\\|develop' | xargs -n 1 git branch -d"
-    
-    # Find commits by message
-    find = "!git log --pretty=format:'%C(yellow)%h  %C(blue)%ad  %C(reset)%s%C(green)  [%cn] %C(red)%d' --decorate --date=short -S"
-    
-    # Show contributors
-    contributors = shortlog -sn
-    
-    # Quick add and commit
-    ac = "!git add -A && git commit -m"
-    
-    # Show current branch
-    current = symbolic-ref --short HEAD
+
+[user]
+    name = Yang
+    email = yang@codewishes.dev
 
 [core]
     editor = nano

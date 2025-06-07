@@ -51,11 +51,12 @@ show_help() {
     echo "  -h, --help    Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0                    # List all available packages"
-    echo "  $0 --installed        # List all installed packages"
+    echo "  $0                    # List explicitly installed packages (default)"
+    echo "  $0 firefox            # Search for firefox in repositories"
+    echo "  $0 --aur              # List installed AUR packages"
     echo "  $0 --aur firefox      # Search for firefox in AUR"
-    echo "  $0 --explicit         # List explicitly installed packages"
-    echo "  $0 --sizes firefox    # Show firefox package with size info"
+    echo "  $0 --installed        # List all installed packages (including dependencies)"
+    echo "  $0 --details firefox  # Show detailed package information"
 }
 
 # Parse command line arguments
@@ -127,7 +128,13 @@ list_pacman_packages() {
             $cmd $args "$SEARCH_TERM"
         fi
     else
-        $cmd $args
+        # Default behavior: show explicit packages if no search term and no specific flags
+        if [[ $INSTALLED_ONLY == true || $EXPLICIT_ONLY == true || $FOREIGN_ONLY == true ]]; then
+            $cmd $args
+        else
+            # Default to explicit packages
+            $cmd -Qe
+        fi
     fi
 }
 
@@ -152,8 +159,8 @@ list_aur_packages() {
         if [[ $INSTALLED_ONLY == true ]]; then
             $cmd $args
         else
-            print_warning "Listing all AUR packages would be too verbose. Please provide a search term."
-            return 1
+            # Default to showing installed AUR packages (explicit foreign packages)
+            $cmd -Qm
         fi
     fi
 }
@@ -191,7 +198,11 @@ echo ""
 if [[ $SHOW_DETAILS == true ]]; then
     show_package_details
 elif [[ $AUR_PACKAGES == true ]]; then
-    print_status "Searching AUR packages..."
+    if [[ -n $SEARCH_TERM ]]; then
+        print_status "Searching AUR packages..."
+    else
+        print_status "Listing installed AUR packages..."
+    fi
     list_aur_packages
 else
     if [[ $INSTALLED_ONLY == true ]]; then
@@ -200,8 +211,10 @@ else
         print_status "Listing explicitly installed packages..."
     elif [[ $FOREIGN_ONLY == true ]]; then
         print_status "Listing foreign (AUR) packages..."
-    else
+    elif [[ -n $SEARCH_TERM ]]; then
         print_status "Searching repository packages..."
+    else
+        print_status "Listing explicitly installed packages..."
     fi
     
     list_pacman_packages
