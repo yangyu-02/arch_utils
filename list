@@ -1,0 +1,208 @@
+#!/bin/bash
+
+# Arch Linux Package List Utility
+# Usage: ./list [OPTIONS] [SEARCH_TERM]
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Default options
+AUR_PACKAGES=false
+INSTALLED_ONLY=false
+EXPLICIT_ONLY=false
+FOREIGN_ONLY=false
+SEARCH_TERM=""
+SHOW_SIZES=false
+SHOW_DETAILS=false
+
+# Function to show help
+show_help() {
+    echo "Usage: $0 [OPTIONS] [SEARCH_TERM]"
+    echo ""
+    echo "Options:"
+    echo "  --aur         List AUR packages (foreign packages)"
+    echo "  --installed   List only installed packages"
+    echo "  --explicit    List only explicitly installed packages"
+    echo "  --foreign     List foreign (AUR) packages"
+    echo "  --sizes       Show package sizes"
+    echo "  --details     Show detailed package information"
+    echo "  -h, --help    Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0                    # List all available packages"
+    echo "  $0 --installed        # List all installed packages"
+    echo "  $0 --aur firefox      # Search for firefox in AUR"
+    echo "  $0 --explicit         # List explicitly installed packages"
+    echo "  $0 --sizes firefox    # Show firefox package with size info"
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --aur)
+            AUR_PACKAGES=true
+            shift
+            ;;
+        --installed)
+            INSTALLED_ONLY=true
+            shift
+            ;;
+        --explicit)
+            EXPLICIT_ONLY=true
+            shift
+            ;;
+        --foreign)
+            FOREIGN_ONLY=true
+            shift
+            ;;
+        --sizes)
+            SHOW_SIZES=true
+            shift
+            ;;
+        --details)
+            SHOW_DETAILS=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            print_error "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+        *)
+            SEARCH_TERM="$1"
+            shift
+            ;;
+    esac
+done
+
+# Function to list packages with pacman
+list_pacman_packages() {
+    local cmd="pacman"
+    local args=""
+    
+    if [[ $INSTALLED_ONLY == true ]]; then
+        args="$args -Q"
+    elif [[ $EXPLICIT_ONLY == true ]]; then
+        args="$args -Qe"
+    elif [[ $FOREIGN_ONLY == true ]]; then
+        args="$args -Qm"
+    else
+        args="$args -Ss"
+    fi
+    
+    if [[ $SHOW_SIZES == true ]] && [[ $INSTALLED_ONLY == true || $EXPLICIT_ONLY == true || $FOREIGN_ONLY == true ]]; then
+        args="$args -i"
+    fi
+    
+    if [[ -n $SEARCH_TERM ]]; then
+        if [[ $INSTALLED_ONLY == true || $EXPLICIT_ONLY == true || $FOREIGN_ONLY == true ]]; then
+            $cmd $args | grep -i "$SEARCH_TERM" || print_warning "No matching packages found"
+        else
+            $cmd $args "$SEARCH_TERM"
+        fi
+    else
+        $cmd $args
+    fi
+}
+
+# Function to list AUR packages
+list_aur_packages() {
+    if ! command -v paru &> /dev/null; then
+        print_error "paru is not installed. Please install paru to search AUR packages."
+        print_status "You can install paru with: git clone https://aur.archlinux.org/paru.git && cd paru && makepkg -si"
+        return 1
+    fi
+    
+    local cmd="paru"
+    local args="-Ss"
+    
+    if [[ $INSTALLED_ONLY == true ]]; then
+        args="-Qm"
+    fi
+    
+    if [[ -n $SEARCH_TERM ]]; then
+        $cmd $args "$SEARCH_TERM"
+    else
+        if [[ $INSTALLED_ONLY == true ]]; then
+            $cmd $args
+        else
+            print_warning "Listing all AUR packages would be too verbose. Please provide a search term."
+            return 1
+        fi
+    fi
+}
+
+# Function to show package details
+show_package_details() {
+    if [[ -z $SEARCH_TERM ]]; then
+        print_error "Package name required for detailed information"
+        return 1
+    fi
+    
+    print_status "Package details for: $SEARCH_TERM"
+    echo ""
+    
+    # Check if package is installed
+    if pacman -Qi "$SEARCH_TERM" &> /dev/null; then
+        echo -e "${GREEN}=== Installed Package Information ===${NC}"
+        pacman -Qi "$SEARCH_TERM"
+    elif pacman -Si "$SEARCH_TERM" &> /dev/null; then
+        echo -e "${YELLOW}=== Repository Package Information ===${NC}"
+        pacman -Si "$SEARCH_TERM"
+    elif command -v paru &> /dev/null && paru -Si "$SEARCH_TERM" &> /dev/null; then
+        echo -e "${CYAN}=== AUR Package Information ===${NC}"
+        paru -Si "$SEARCH_TERM"
+    else
+        print_error "Package '$SEARCH_TERM' not found in repositories or AUR"
+        return 1
+    fi
+}
+
+# Main execution
+echo "=== Arch Linux Package Lister ==="
+echo ""
+
+if [[ $SHOW_DETAILS == true ]]; then
+    show_package_details
+elif [[ $AUR_PACKAGES == true ]]; then
+    print_status "Searching AUR packages..."
+    list_aur_packages
+else
+    if [[ $INSTALLED_ONLY == true ]]; then
+        print_status "Listing installed packages..."
+    elif [[ $EXPLICIT_ONLY == true ]]; then
+        print_status "Listing explicitly installed packages..."
+    elif [[ $FOREIGN_ONLY == true ]]; then
+        print_status "Listing foreign (AUR) packages..."
+    else
+        print_status "Searching repository packages..."
+    fi
+    
+    list_pacman_packages
+fi 

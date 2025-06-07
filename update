@@ -1,0 +1,160 @@
+#!/bin/bash
+
+# Arch Linux Package Update Utility
+# Usage: ./update [--aur]
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Check if running as root
+if [[ $EUID -eq 0 ]]; then
+    print_error "This script should not be run as root!"
+    exit 1
+fi
+
+# Parse command line arguments
+AUR_UPDATE=false
+FORCE_UPDATE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --aur)
+            AUR_UPDATE=true
+            shift
+            ;;
+        --force)
+            FORCE_UPDATE=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --aur     Update AUR packages using paru"
+            echo "  --force   Force update without confirmation"
+            echo "  -h, --help Show this help message"
+            exit 0
+            ;;
+        *)
+            print_error "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Function to update official packages
+update_official() {
+    print_status "Updating official repository packages..."
+    
+    # Sync package databases
+    sudo pacman -Sy
+    
+    # Check for updates
+    updates=$(pacman -Qu | wc -l)
+    
+    if [[ $updates -eq 0 ]]; then
+        print_success "All official packages are up to date!"
+        return 0
+    fi
+    
+    print_status "Found $updates package(s) to update"
+    
+    if [[ $FORCE_UPDATE == false ]]; then
+        pacman -Qu
+        echo ""
+        read -p "Do you want to proceed with the update? [Y/n] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ ! -z $REPLY ]]; then
+            print_warning "Update cancelled by user"
+            return 1
+        fi
+    fi
+    
+    # Perform update
+    sudo pacman -Su
+    print_success "Official packages updated successfully!"
+}
+
+# Function to update AUR packages
+update_aur() {
+    print_status "Updating AUR packages..."
+    
+    # Check if paru is installed
+    if ! command -v paru &> /dev/null; then
+        print_error "paru is not installed. Please install paru to update AUR packages."
+        print_status "You can install paru with: git clone https://aur.archlinux.org/paru.git && cd paru && makepkg -si"
+        return 1
+    fi
+    
+    # Check for AUR updates
+    aur_updates=$(paru -Qua | wc -l)
+    
+    if [[ $aur_updates -eq 0 ]]; then
+        print_success "All AUR packages are up to date!"
+        return 0
+    fi
+    
+    print_status "Found $aur_updates AUR package(s) to update"
+    
+    if [[ $FORCE_UPDATE == false ]]; then
+        paru -Qua
+        echo ""
+        read -p "Do you want to proceed with the AUR update? [Y/n] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ ! -z $REPLY ]]; then
+            print_warning "AUR update cancelled by user"
+            return 1
+        fi
+    fi
+    
+    # Perform AUR update
+    paru -Sua
+    print_success "AUR packages updated successfully!"
+}
+
+# Main execution
+echo "=== Arch Linux Package Updater ==="
+echo ""
+
+if [[ $AUR_UPDATE == true ]]; then
+    update_aur
+else
+    update_official
+    
+    # Ask if user wants to update AUR packages too
+    if command -v paru &> /dev/null; then
+        echo ""
+        read -p "Do you also want to update AUR packages? [y/N] " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            update_aur
+        fi
+    fi
+fi
+
+echo ""
+print_success "Update process completed!" 
