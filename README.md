@@ -61,7 +61,7 @@ gsa                 # git stash apply - restore latest stash
 # Fixing mistakes
 gundo               # undo last commit (keeps changes)
 gwipe               # hard reset to HEAD (loses changes!)
-gflip               # show last 10 branches you worked on
+gfp                 # show last 10 branches you worked on
 ```
 
 All commands support `--help` for detailed options. 
