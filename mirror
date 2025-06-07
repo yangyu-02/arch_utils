@@ -1,0 +1,360 @@
+#!/bin/bash
+
+# Arch Linux Mirror Management Utility
+# Usage: ./mirror [OPTIONS]
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Check if running as root for certain operations
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        print_error "This operation requires root privileges. Please run with sudo."
+        exit 1
+    fi
+}
+
+# Backup current mirrorlist
+backup_mirrorlist() {
+    local backup_file="/etc/pacman.d/mirrorlist.backup.$(date +%Y%m%d_%H%M%S)"
+    print_status "Creating backup of current mirrorlist..."
+    sudo cp /etc/pacman.d/mirrorlist "$backup_file"
+    print_success "Backup created: $backup_file"
+}
+
+# Show current mirrors
+show_current() {
+    print_status "Current active mirrors:"
+    echo ""
+    grep -E "^Server" /etc/pacman.d/mirrorlist | head -10 | while read -r line; do
+        echo "  $line"
+    done
+    echo ""
+    
+    local total_mirrors=$(grep -c "^Server" /etc/pacman.d/mirrorlist)
+    local uncommented_mirrors=$(grep -c "^Server" /etc/pacman.d/mirrorlist)
+    local commented_mirrors=$(grep -c "^#Server" /etc/pacman.d/mirrorlist)
+    
+    echo "Active mirrors: $uncommented_mirrors"
+    echo "Commented mirrors: $commented_mirrors"
+    echo "Total mirrors in list: $((uncommented_mirrors + commented_mirrors))"
+}
+
+# Test mirror speeds
+test_mirrors() {
+    print_status "Testing mirror speeds (this may take a while)..."
+    
+    if ! command -v rankmirrors &> /dev/null; then
+        print_error "rankmirrors is not installed. Please install pacman-contrib:"
+        print_status "sudo pacman -S pacman-contrib"
+        echo ""
+        read -p "Do you want to install pacman-contrib now? [Y/n] " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+            print_status "Installing pacman-contrib..."
+            sudo pacman -S pacman-contrib
+            print_success "pacman-contrib installed successfully"
+        else
+            print_warning "Cannot test mirrors without pacman-contrib"
+            exit 1
+        fi
+    fi
+    
+    # Create temporary file with top mirrors
+    local temp_file=$(mktemp)
+    grep -E "^Server|^#Server" /etc/pacman.d/mirrorlist | head -20 | sed 's/^#//' > "$temp_file"
+    
+    print_status "Testing top 20 mirrors..."
+    rankmirrors -n 6 "$temp_file"
+    
+    rm "$temp_file"
+}
+
+# Update mirrorlist using reflector
+update_reflector() {
+    local country="$1"
+    local protocol="$2"
+    local sort_by="$3"
+    local number="$4"
+    local fast_mode="$5"
+    
+    if ! command -v reflector &> /dev/null; then
+        print_error "reflector is not installed. Please install it:"
+        print_status "sudo pacman -S reflector"
+        echo ""
+        read -p "Do you want to install reflector now? [Y/n] " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+            print_status "Installing reflector..."
+            sudo pacman -S reflector
+            print_success "reflector installed successfully"
+        else
+            print_warning "Cannot update mirrors without reflector"
+            exit 1
+        fi
+    fi
+    
+    check_root
+    backup_mirrorlist
+    
+    if [[ "$fast_mode" == "true" ]]; then
+        print_status "Updating mirrorlist using fast mode (no speed testing)..."
+    else
+        print_status "Updating mirrorlist using reflector (with speed testing)..."
+        print_warning "This may take a while due to speed testing. Use --fast for quicker updates."
+    fi
+    
+    local cmd="reflector"
+    
+    # Add performance optimizations
+    cmd="$cmd --latest 50"           # Only consider recently synced mirrors
+    cmd="$cmd --age 12"              # Only mirrors updated in last 12 hours
+    cmd="$cmd --completion-percent 95" # Only mirrors with high completion rate
+    
+    if [[ "$fast_mode" != "true" ]]; then
+        cmd="$cmd --download-timeout 3"   # Reduce timeout to 3 seconds
+        cmd="$cmd --threads 5"           # Use 5 threads for faster testing
+    fi
+    
+    if [[ -n "$country" ]]; then
+        cmd="$cmd --country '$country'"
+    fi
+    
+    if [[ -n "$protocol" ]]; then
+        cmd="$cmd --protocol $protocol"
+    else
+        cmd="$cmd --protocol https"
+    fi
+    
+    if [[ -n "$sort_by" ]]; then
+        cmd="$cmd --sort $sort_by"
+    elif [[ "$fast_mode" == "true" ]]; then
+        cmd="$cmd --sort score"  # Use score instead of rate for fast mode
+    else
+        cmd="$cmd --sort rate"
+    fi
+    
+    if [[ -n "$number" ]]; then
+        cmd="$cmd --number $number"
+    else
+        cmd="$cmd --number 10"
+    fi
+    
+    cmd="$cmd --save /etc/pacman.d/mirrorlist"
+    
+    print_status "Running: $cmd"
+    eval "$cmd"
+    
+    print_success "Mirrorlist updated successfully!"
+    show_current
+}
+
+# Restore from backup
+restore_backup() {
+    check_root
+    
+    print_status "Available backups:"
+    local backups=($(ls /etc/pacman.d/mirrorlist.backup.* 2>/dev/null | sort -r))
+    
+    if [[ ${#backups[@]} -eq 0 ]]; then
+        print_error "No backup files found!"
+        exit 1
+    fi
+    
+    for i in "${!backups[@]}"; do
+        local backup_file="${backups[$i]}"
+        local backup_date=$(basename "$backup_file" | sed 's/mirrorlist.backup.//')
+        echo "  [$((i+1))] $backup_date"
+    done
+    
+    echo ""
+    read -p "Select backup to restore [1-${#backups[@]}]: " -r choice
+    
+    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ "$choice" -lt 1 ]] || [[ "$choice" -gt ${#backups[@]} ]]; then
+        print_error "Invalid selection!"
+        exit 1
+    fi
+    
+    local selected_backup="${backups[$((choice-1))]}"
+    
+    print_status "Restoring from: $selected_backup"
+    cp "$selected_backup" /etc/pacman.d/mirrorlist
+    print_success "Mirrorlist restored successfully!"
+    show_current
+}
+
+# Enable/disable specific mirrors
+toggle_mirror() {
+    local action="$1"
+    local pattern="$2"
+    
+    check_root
+    
+    if [[ -z "$pattern" ]]; then
+        print_error "Please specify a mirror pattern to $action"
+        exit 1
+    fi
+    
+    backup_mirrorlist
+    
+    if [[ "$action" == "enable" ]]; then
+        print_status "Enabling mirrors matching: $pattern"
+        sed -i "s/^#Server.*$pattern/$(sed -n "s/^#Server.*$pattern.*$/&/p" /etc/pacman.d/mirrorlist | sed 's/^#//')/" /etc/pacman.d/mirrorlist
+        sed -i "s/^#\(Server.*$pattern.*\)/\1/" /etc/pacman.d/mirrorlist
+    else
+        print_status "Disabling mirrors matching: $pattern"
+        sed -i "s/^Server.*$pattern/#&/" /etc/pacman.d/mirrorlist
+    fi
+    
+    print_success "Mirror toggle completed!"
+    show_current
+}
+
+# Show help
+show_help() {
+    echo "Usage: $0 [COMMAND] [OPTIONS]"
+    echo ""
+    echo "Commands:"
+    echo "  show                    Show current active mirrors"
+    echo "  test                    Test speed of current mirrors"
+    echo "  update                  Update mirrorlist using reflector"
+    echo "  restore                 Restore from backup"
+    echo "  enable PATTERN          Enable mirrors matching pattern"
+    echo "  disable PATTERN         Disable mirrors matching pattern"
+    echo ""
+    echo "Update Options:"
+    echo "  --country COUNTRY       Filter by country (e.g., 'United States,Germany')"
+    echo "  --protocol PROTOCOL     Use specific protocol (https, http, ftp)"
+    echo "  --sort SORT_BY          Sort by: rate, country, score, delay"
+    echo "  --number NUMBER         Number of mirrors to keep (default: 10)"
+    echo "  --fast                  Fast mode: skip speed testing, sort by score"
+    echo ""
+    echo "Examples:"
+    echo "  $0 show                                    # Show current mirrors"
+    echo "  $0 test                                    # Test mirror speeds"
+    echo "  $0 update                                  # Update with defaults"
+    echo "  $0 update --fast                           # Quick update (no speed test)"
+    echo "  $0 update --country 'United States'        # US mirrors only"
+    echo "  $0 update --country 'US,DE' --number 5    # US/German, top 5"
+    echo "  $0 enable kernel.org                       # Enable kernel.org mirrors"
+    echo "  $0 disable geo.mirror                      # Disable geo mirrors"
+    echo "  $0 restore                                 # Restore from backup"
+}
+
+# Parse command line arguments
+COMMAND=""
+COUNTRY=""
+PROTOCOL=""
+SORT_BY=""
+NUMBER=""
+FAST_MODE="false"
+
+if [[ $# -eq 0 ]]; then
+    show_help
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        show|test|update|restore)
+            COMMAND="$1"
+            shift
+            ;;
+        enable|disable)
+            COMMAND="$1"
+            PATTERN="$2"
+            shift 2
+            ;;
+        --country)
+            COUNTRY="$2"
+            shift 2
+            ;;
+        --protocol)
+            PROTOCOL="$2"
+            shift 2
+            ;;
+        --sort)
+            SORT_BY="$2"
+            shift 2
+            ;;
+        --number)
+            NUMBER="$2"
+            shift 2
+            ;;
+        --fast)
+            FAST_MODE="true"
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            print_error "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Execute command
+case $COMMAND in
+    show)
+        echo "=== Arch Linux Mirror Status ==="
+        echo ""
+        show_current
+        ;;
+    test)
+        echo "=== Arch Linux Mirror Speed Test ==="
+        echo ""
+        test_mirrors
+        ;;
+    update)
+        echo "=== Arch Linux Mirror Update ==="
+        echo ""
+        update_reflector "$COUNTRY" "$PROTOCOL" "$SORT_BY" "$NUMBER" "$FAST_MODE"
+        ;;
+    restore)
+        echo "=== Arch Linux Mirror Restore ==="
+        echo ""
+        restore_backup
+        ;;
+    enable)
+        echo "=== Arch Linux Mirror Enable ==="
+        echo ""
+        toggle_mirror "enable" "$PATTERN"
+        ;;
+    disable)
+        echo "=== Arch Linux Mirror Disable ==="
+        echo ""
+        toggle_mirror "disable" "$PATTERN"
+        ;;
+    *)
+        print_error "Unknown command: $COMMAND"
+        show_help
+        exit 1
+        ;;
+esac 

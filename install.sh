@@ -47,7 +47,7 @@ check_arch_linux() {
 # Make scripts executable
 make_executable() {
     print_status "Making scripts executable..."
-    chmod +x update list remove clean sysinfo
+    chmod +x update list remove clean sysinfo mirror
     print_success "Scripts are now executable"
 }
 
@@ -155,7 +155,7 @@ create_symlinks() {
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
         local current_dir=$(pwd)
-        local scripts=("update" "list" "remove" "clean" "sysinfo")
+        local scripts=("update" "list" "remove" "clean" "sysinfo" "mirror")
         
         for script in "${scripts[@]}"; do
             if [[ -L "/usr/local/bin/$script" ]]; then
@@ -206,13 +206,39 @@ check_dependencies() {
             print_success "lm_sensors installed successfully"
         fi
     fi
+    
+    # Check for pacman-contrib (needed for mirror testing)
+    if command -v rankmirrors &> /dev/null; then
+        print_success "pacman-contrib is installed (mirror testing available)"
+    else
+        print_warning "pacman-contrib is not installed (mirror testing unavailable)"
+        read -p "Do you want to install pacman-contrib? [Y/n] " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+            sudo pacman -S --noconfirm pacman-contrib
+            print_success "pacman-contrib installed successfully"
+        fi
+    fi
+    
+    # Check for reflector (needed for mirror updates)
+    if command -v reflector &> /dev/null; then
+        print_success "reflector is installed (mirror updates available)"
+    else
+        print_warning "reflector is not installed (mirror updates unavailable)"
+        read -p "Do you want to install reflector? [Y/n] " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+            sudo pacman -S --noconfirm reflector
+            print_success "reflector installed successfully"
+        fi
+    fi
 }
 
 # Test installation
 test_installation() {
     print_header "Testing Installation"
     
-    local scripts=("update" "list" "remove" "clean" "sysinfo")
+    local scripts=("update" "list" "remove" "clean" "sysinfo" "mirror")
     
     for script in "${scripts[@]}"; do
         if ./"$script" --help &> /dev/null; then
@@ -263,6 +289,7 @@ main() {
     echo "  remove  - Remove packages safely"
     echo "  clean   - System cleanup utility"
     echo "  sysinfo - System information display"
+    echo "  mirror  - Manage pacman mirrors"
     echo ""
     print_status "Run any command with --help for usage information"
     print_status "Check README.md for detailed documentation"

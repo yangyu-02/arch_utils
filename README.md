@@ -13,7 +13,7 @@ cd arch_utils
 Or manually:
 ```bash
 # Make scripts executable
-chmod +x update list remove clean sysinfo git_aliases.sh
+chmod +x update list remove clean sysinfo mirror git_aliases.sh
 
 # Add to PATH
 echo 'export PATH="$PATH:'$(pwd)'"' >> ~/.bashrc
@@ -39,6 +39,15 @@ remove firefox      # Remove package
 remove -r firefox   # Remove with dependencies
 clean --all         # Clean system (cache + orphans)
 sysinfo             # Show system information
+mirror show         # Show current active mirrors
+mirror test         # Test mirror speeds (requires pacman-contrib)
+mirror update       # Update mirrorlist with fastest mirrors (slow)
+mirror update --fast # Quick update without speed testing
+mirror update --country 'United States' --number 5  # US mirrors only, top 5
+mirror update --fast --country 'US'  # Quick US mirrors update
+mirror enable kernel.org    # Enable specific mirrors
+mirror disable geo.mirror   # Disable specific mirrors
+mirror restore      # Restore from backup
 ```
 
 ### Git Commands
@@ -63,5 +72,33 @@ gundo               # undo last commit (keeps changes)
 gwipe               # hard reset to HEAD (loses changes!)
 gfp                 # show last 10 branches you worked on
 ```
+
+### Mirror Management
+```bash
+# Basic mirror operations
+mirror show                             # Show current active mirrors
+mirror test                             # Test mirror speeds (needs pacman-contrib)
+
+# Update mirrors (two modes)
+mirror update                           # Full update with speed testing (slow)
+mirror update --fast                    # Quick update without speed testing
+
+# Country-specific mirrors
+mirror update --country 'United States' # US mirrors only
+mirror update --country 'US,DE,CA'     # Multiple countries
+mirror update --fast --country 'US'    # Quick US update
+
+# Advanced options
+mirror update --number 5               # Keep only top 5 mirrors
+mirror update --protocol https         # HTTPS only
+mirror update --sort score             # Sort by reliability score
+
+# Mirror management
+mirror enable kernel.org               # Enable mirrors matching pattern
+mirror disable geo.mirror              # Disable mirrors matching pattern
+mirror restore                         # Restore from automatic backup
+```
+
+**Note**: The `--fast` mode is recommended for quick updates as it avoids timeouts from slow mirrors.
 
 All commands support `--help` for detailed options. 
