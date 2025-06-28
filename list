@@ -102,6 +102,29 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Function to list packages with descriptions
+list_packages_with_descriptions() {
+    local packages
+    mapfile -t packages < <(pacman -Qe | awk '{print $1}')
+    
+    if [[ ${#packages[@]} -eq 0 ]]; then
+        print_warning "No explicitly installed packages found"
+        return
+    fi
+    
+    printf "%-30s %s\n" "Package" "Description"
+    printf "%-30s %s\n" "-------" "-----------"
+    
+    for package in "${packages[@]}"; do
+        local desc
+        desc=$(pacman -Qi "$package" 2>/dev/null | grep "^Description" | sed 's/Description *: *//')
+        if [[ -z "$desc" ]]; then
+            desc="No description available"
+        fi
+        printf "%-30s %s\n" "$package" "$desc"
+    done
+}
+
 # Function to list packages with pacman
 list_pacman_packages() {
     local cmd="pacman"
@@ -132,8 +155,9 @@ list_pacman_packages() {
         if [[ $INSTALLED_ONLY == true || $EXPLICIT_ONLY == true || $FOREIGN_ONLY == true ]]; then
             $cmd $args
         else
-            # Default to explicit packages
-            $cmd -Qe
+            # Default to explicit packages with descriptions
+            list_packages_with_descriptions
+            return
         fi
     fi
 }

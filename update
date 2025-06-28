@@ -70,9 +70,6 @@ done
 update_official() {
     print_status "Updating official repository packages..."
     
-    # Sync package databases
-    sudo pacman -Sy
-    
     # Check for updates
     updates=$(pacman -Qu | wc -l)
     
@@ -94,8 +91,8 @@ update_official() {
         fi
     fi
     
-    # Perform update
-    sudo pacman -Su
+    # Perform update (sync databases and upgrade in single operation)
+    sudo pacman -Syu
     print_success "Official packages updated successfully!"
 }
 
